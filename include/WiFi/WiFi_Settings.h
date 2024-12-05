@@ -13,6 +13,7 @@ struct WiFiNetwork {
 
 // List of Wi-Fi networks (add more networks as needed)
 WiFiNetwork wifiNetworks[] = {
+    {"CactusCon", "Cactus2024!"},
     {"BenNet", "River11111"},  // Updated SSID3 and password
     {"SSID_1", "Password_1"},
     {"SSID_2", "Password_2"}

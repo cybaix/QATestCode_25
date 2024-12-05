@@ -24,6 +24,8 @@
 unsigned long lastDiagnosticsRun = 0;      // Track last diagnostics run time
 const unsigned long diagnosticsInterval = 600000;  // Run every 10 minutes (600000 ms)
 
+SPIClass hspi = SPIClass(HSPI); // Using HSPI as it's unused
+
 // Array of LED pins
 int ledPins[] = {LED_PIN_1, LED_PIN_2, LED_PIN_3, LED_PIN_4, LED_PIN_5, LED_PIN_6};
 int numLeds = sizeof(ledPins) / sizeof(ledPins[0]);
@@ -92,6 +94,20 @@ void setup() {
     Serial.begin(115200);
     while (!Serial);
 
+    // Initialize each LED pin as an output
+    for (int i = 0; i < numLeds; i++) {
+        pinMode(ledPins[i], OUTPUT);
+        digitalWrite(ledPins[i], HIGH);
+        Serial.printf("Set LED %d on\n", i);
+        delay(500);
+    }
+
+    for (int i = numLeds - 1; i > -1; i--) {
+        digitalWrite(ledPins[i], LOW);
+        Serial.printf("Set LED %d off\n", i);
+        delay(500);
+    }
+
     initializeScreen();  // Initialize the TFT screen
     displayWelcomeMessage();  // Display a welcome message
 
@@ -114,10 +130,10 @@ void setup() {
     initNeoPixels();
 
     // Initialize SPI for SD card with custom pins
-    SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+    hspi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
     
     // Initialize SD card
-    if (SD.begin(SD_CS)) {
+    if (SD.begin(SD_CS, hspi)) {
         Serial.println("SD card initialized successfully.");
         if (SD.cardSize() > 0) {
             Serial.print("SD Card Size: ");
@@ -130,11 +146,6 @@ void setup() {
         Serial.println("No SD card detected. Please insert an SD card.");
     }
 
-    // Initialize each LED pin as an output
-    for (int i = 0; i < numLeds; i++) {
-        pinMode(ledPins[i], OUTPUT);
-    }
-
     // Initialize rotary encoder pins
     pinMode(ENCODER_PIN_A, INPUT_PULLUP);
     pinMode(ENCODER_PIN_B, INPUT_PULLUP);
@@ -144,8 +155,8 @@ void setup() {
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
 
     // Attach interrupts for rotary encoder
-    attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), updateEncoder, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), updateEncoder, CHANGE);
+    //attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), updateEncoder, CHANGE);
+    //attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), updateEncoder, CHANGE);
 
     // Run an initial Wi-Fi scan and connect to Wi-Fi
     scanWiFiNetworks();     // Use scan function from WiFi_Module
