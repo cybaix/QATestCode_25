@@ -40,8 +40,8 @@ uint32_t colors[] = {
 int numColors = sizeof(colors) / sizeof(colors[0]);
 
 // Variables for rotary encoder
-RotaryEncoder rotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B);
-volatile bool rotaryEncoderTurnedLeftFlag, rotaryEncoderTurnedRightFlag;
+RotaryEncoder rotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B, ENCODER_BUTTON_PIN);
+volatile bool rotaryEncoderTurnedLeftFlag, rotaryEncoderTurnedRightFlag, rotaryEncoderButtonPushedFlag;
 
 // State tracking for the boot button with debounce
 unsigned long lastEnterPressTime = 0;
@@ -76,7 +76,11 @@ void printDeviceInfo() {
     Serial.println("% used)");
 }
 
-void rotary_encoder_callback(long value) {
+void rotaryButtonCallback(unsigned long) {
+    rotaryEncoderButtonPushedFlag = true;
+}
+
+void rotaryEncoderCallback(long value) {
     switch( value )
 	{
 		case 1:
@@ -150,9 +154,10 @@ void setup() {
     // Initialize rotary encoder pins
     rotaryEncoder.setEncoderType(EncoderType::FLOATING);
     rotaryEncoder.setBoundaries( -1, 1, false );
-    rotaryEncoder.onTurned(rotary_encoder_callback);
+    rotaryEncoder.onTurned(&rotaryEncoderCallback);
+    rotaryEncoder.onPressed(&rotaryButtonCallback);
     rotaryEncoder.begin();
-    pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
+    //pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
 
     // Initialize boot button
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
@@ -197,6 +202,11 @@ void loop() {
    //     checkBatteryStatus();
    //     lastBatteryCheck = millis();
    // }
+
+    if (rotaryEncoderButtonPushedFlag) { 
+        Serial.println("Rotary Encoder button pressed");
+        rotaryEncoderButtonPushedFlag = false;
+    }
 
     if (rotaryEncoderTurnedLeftFlag) {
         Serial.println("Rotary Encoder turned left.");
