@@ -14,7 +14,7 @@ extern uint32_t colors[];
 extern int numColors;
 
 // Rotary Encoder variables for manual control
-extern volatile int encoderValue;
+//extern volatile int encoderValue;
 int currentLED = 0;
 int currentColor = 0;
 bool neoPixelOn = true;
@@ -71,9 +71,10 @@ void enterQAMode() {
 
     automatedCycle();
 
-    static int lastEncoderValue = 0;
+    //static int lastEncoderValue = 0;
     unsigned long lastActivityTime = millis();  // Track the time of the last activity
 
+    /*
     while (true) {
         checkButtonStates();
 
@@ -114,5 +115,5 @@ void enterQAMode() {
         }
 
         delay(10);  // Small delay for stability
-    }
+    }*/
 }

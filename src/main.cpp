@@ -4,6 +4,7 @@
 #include "pins.h"
 #include <SPI.h>
 #include <SD.h>
+#include <ESP32RotaryEncoder.h>
 #include "QA_Test/QA_Test_Sequence.h"
 #include "LED/Status_LED.h"
 #include "WiFi/WiFi_Settings.h"   // Wi-Fi connection settings
@@ -39,25 +40,12 @@ uint32_t colors[] = {
 int numColors = sizeof(colors) / sizeof(colors[0]);
 
 // Variables for rotary encoder
-volatile int lastEncoded = 0;
-volatile int encoderValue = 0;
+RotaryEncoder rotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B);
+volatile bool rotaryEncoderTurnedLeftFlag, rotaryEncoderTurnedRightFlag;
 
 // State tracking for the boot button with debounce
 unsigned long lastEnterPressTime = 0;
 bool firstEnterPressDetected = false;
-
-void IRAM_ATTR updateEncoder() {
-    int MSB = digitalRead(ENCODER_PIN_A);  // Most significant bit
-    int LSB = digitalRead(ENCODER_PIN_B);  // Least significant bit
-
-    int encoded = (MSB << 1) | LSB;
-    int sum = (lastEncoded << 2) | encoded;
-
-    if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) encoderValue++;
-    if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue--;
-
-    lastEncoded = encoded;
-}
 
 void printDeviceInfo() {
     // Display code version
@@ -88,7 +76,20 @@ void printDeviceInfo() {
     Serial.println("% used)");
 }
 
+void rotary_encoder_callback(long value) {
+    switch( value )
+	{
+		case 1:
+	  		rotaryEncoderTurnedRightFlag = true;
+		break;
 
+		case -1:
+	  		rotaryEncoderTurnedLeftFlag = true;
+		break;
+    }
+
+    rotaryEncoder.setEncoderValue(0);
+}
 
 void setup() {
     Serial.begin(115200);
@@ -147,16 +148,14 @@ void setup() {
     }
 
     // Initialize rotary encoder pins
-    pinMode(ENCODER_PIN_A, INPUT_PULLUP);
-    pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+    rotaryEncoder.setEncoderType(EncoderType::FLOATING);
+    rotaryEncoder.setBoundaries( -1, 1, false );
+    rotaryEncoder.onTurned(rotary_encoder_callback);
+    rotaryEncoder.begin();
     pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
 
     // Initialize boot button
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
-
-    // Attach interrupts for rotary encoder
-    //attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), updateEncoder, CHANGE);
-    //attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), updateEncoder, CHANGE);
 
     // Run an initial Wi-Fi scan and connect to Wi-Fi
     scanWiFiNetworks();     // Use scan function from WiFi_Module
@@ -198,6 +197,14 @@ void loop() {
    //     checkBatteryStatus();
    //     lastBatteryCheck = millis();
    // }
+
+    if (rotaryEncoderTurnedLeftFlag) {
+        Serial.println("Rotary Encoder turned left.");
+        rotaryEncoderTurnedLeftFlag = false;
+    } else if (rotaryEncoderTurnedRightFlag) {
+        Serial.println("Rotary Encoder turned right.");
+        rotaryEncoderTurnedRightFlag = false;
+    }
 
     // Call the button check function to handle button actions outside QA Mode
     checkButtonStates();

@@ -5,12 +5,13 @@ TFT_eSPI tft = TFT_eSPI();  // Create TFT instance
 
 void initializeScreen() {
     Serial.println("Initializing screen...");
-    tft.begin();
-    tft.setRotation(1);
+    tft.init();
+    tft.setSwapBytes(true);
+    tft.setRotation(3);
     tft.fillScreen(TFT_BLACK);  // Clear the screen
     
-    pinMode(TFT_LED, OUTPUT);  // Configure backlight pin
-    digitalWrite(TFT_LED, HIGH);  // Turn on backlight
+    //pinMode(TFT_LED, OUTPUT);  // Configure backlight pin
+    //digitalWrite(TFT_LED, HIGH);  // Turn on backlight
 
     Serial.println("Screen initialized successfully!");
 }
