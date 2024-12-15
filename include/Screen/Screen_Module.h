@@ -6,5 +6,6 @@
 // Function declarations
 void initializeScreen();
 void displayWelcomeMessage();
+void displayCoordinates(uint x, uint y);
 
 #endif  // SCREEN_MODULE_H

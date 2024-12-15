@@ -52,9 +52,9 @@
 #define TFT_SCK   12  // SCK for TFT
 
 // Define pins for touch interface, if used
-#define TOUCH_DO  7
-#define TOUCH_DIN 8
-#define TOUCH_CS  3
-#define TOUCH_CLK 9
+#define TOUCH_INT_PIN   GPIO_NUM_7
+#define TOUCH_I2C_SDA	GPIO_NUM_8
+#define TOUCH_I2C_SCL 	GPIO_NUM_9
+#define TOUCH_RST	    GPIO_NUM_3
 
 #endif // PINS_H

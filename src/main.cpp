@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <Arduino.h>
+#include <FT6336U.h>
 //#include <Adafruit_MAX1704X.h>  // Include MAX17048 library
 #include "pins.h"
 #include <SPI.h>
@@ -15,8 +16,6 @@
 #include "LED/NeoPixelControl.h"
 #include "Screen/Screen_Module.h"
 
-
-
 //Adafruit_MAX17048 max17048;  // Create MAX17048 object
 
 //unsigned long lastBatteryCheck = 0;        // Track last battery check time
@@ -30,6 +29,7 @@ SPIClass hspi = SPIClass(HSPI); // Using HSPI as it's unused
 // Array of LED pins
 int ledPins[] = {LED_PIN_1, LED_PIN_2, LED_PIN_3, LED_PIN_4, LED_PIN_5, LED_PIN_6};
 int numLeds = sizeof(ledPins) / sizeof(ledPins[0]);
+FT6336U ft6336u(TOUCH_I2C_SDA, TOUCH_I2C_SCL, TOUCH_RST, TOUCH_INT_PIN);
 
 // Define color array and number of colors for NeoPixel
 uint32_t colors[] = {
@@ -117,11 +117,11 @@ void setup() {
     displayWelcomeMessage();  // Display a welcome message
 
     // Initialize I2C for MAX17048
-   // if (!max17048.begin(&Wire)) {
-   //     Serial.println("Could not find MAX17048 chip!");
-   // } else {
-   //     Serial.println("MAX17048 found!");
-   // }
+    //if (!max17048.begin(&Wire)) {
+    //    Serial.println("Could not find MAX17048 chip!");
+    //} else {
+    //    Serial.println("MAX17048 found!");
+    //}
 
     // Initialize buttons with pull-up resistors
     pinMode(BUTTON_ENTER_PIN, INPUT_PULLUP);
@@ -136,6 +136,8 @@ void setup() {
 
     // Initialize SPI for SD card with custom pins
     hspi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+
+    ft6336u.begin();
     
     // Initialize SD card
     if (SD.begin(SD_CS, hspi)) {
@@ -163,8 +165,8 @@ void setup() {
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
 
     // Run an initial Wi-Fi scan and connect to Wi-Fi
-    scanWiFiNetworks();     // Use scan function from WiFi_Module
-    connectToWiFi();        // Use connect function from WiFi_Settings
+    //scanWiFiNetworks();     // Use scan function from WiFi_Module
+    //connectToWiFi();        // Use connect function from WiFi_Settings
 
     // Display initial battery status
     //checkBatteryStatus();
@@ -214,6 +216,10 @@ void loop() {
     } else if (rotaryEncoderTurnedRightFlag) {
         Serial.println("Rotary Encoder turned right.");
         rotaryEncoderTurnedRightFlag = false;
+    }
+
+    if (ft6336u.read_td_status()) {
+        displayCoordinates(ft6336u.read_touch1_x(),ft6336u.read_touch1_y());
     }
 
     // Call the button check function to handle button actions outside QA Mode

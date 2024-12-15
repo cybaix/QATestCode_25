@@ -22,3 +22,9 @@ void displayWelcomeMessage() {
     tft.setCursor(20, 40);
     tft.println("Welcome to the ESP32!");
 }
+
+void displayCoordinates(uint x, uint y) {
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 40);
+    tft.printf("X: %d, Y: %d\n", x, y);
+}
