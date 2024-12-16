@@ -16,7 +16,7 @@
 
 // Define NeoPixel RGB LED pin and number of LEDs on GPIO18
 #define NEOPIXEL_PIN 18
-#define NUM_NEOPIXELS 4
+#define NUM_NEOPIXELS 6
 
 // Define Buzzer pin
 #define BUZZER_PIN 19

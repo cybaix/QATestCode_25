@@ -1,4 +1,5 @@
 #include "Screen/Screen_Module.h"
+#include <lvgl.h>
 #include "pins.h"
 
 TFT_eSPI tft = TFT_eSPI();  // Create TFT instance

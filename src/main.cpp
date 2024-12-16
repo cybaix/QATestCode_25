@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <Arduino.h>
 #include <FT6336U.h>
+#include <lvgl.h>
 //#include <Adafruit_MAX1704X.h>  // Include MAX17048 library
 #include "pins.h"
 #include <SPI.h>
@@ -15,6 +16,18 @@
 #include "BadgePirates/PirateShipAnimation.h"
 #include "LED/NeoPixelControl.h"
 #include "Screen/Screen_Module.h"
+
+#define TFT_HOR_RES   240
+#define TFT_VER_RES   320
+#define TFT_ROTATION  LV_DISPLAY_ROTATION_270
+
+/*LVGL draw into this buffer, 1/10 screen size usually works well. The size is in bytes*/
+#define DRAW_BUF_SIZE (TFT_HOR_RES * TFT_VER_RES / 10 * (LV_COLOR_DEPTH / 8))
+uint32_t draw_buf[DRAW_BUF_SIZE / 4];
+
+lv_obj_t * main_menu; // Main screen container
+lv_obj_t * window1;   // First window
+lv_obj_t * window2;   // Second window
 
 //Adafruit_MAX17048 max17048;  // Create MAX17048 object
 
@@ -46,6 +59,29 @@ volatile bool rotaryEncoderTurnedLeftFlag, rotaryEncoderTurnedRightFlag, rotaryE
 // State tracking for the boot button with debounce
 unsigned long lastEnterPressTime = 0;
 bool firstEnterPressDetected = false;
+
+/*Read the touchpad*/
+void my_touchpad_read( lv_indev_t * indev, lv_indev_data_t * data )
+{
+    lv_display_rotation_t rotation = lv_disp_get_rotation(lv_disp_get_default());
+    uint16_t x,y;
+
+    if (ft6336u.read_td_status()) {
+        data->state = LV_INDEV_STATE_PRESSED;
+
+        // the touch driver gives coordinates rotated 180, fix them
+        data->point.x = TFT_HOR_RES - ft6336u.read_touch1_x();
+        data->point.y = TFT_VER_RES - ft6336u.read_touch1_y();
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
+}
+
+/*use Arduinos millis() as tick source*/
+static uint32_t my_tick(void)
+{
+    return millis();
+}
 
 void printDeviceInfo() {
     // Display code version
@@ -95,6 +131,53 @@ void rotaryEncoderCallback(long value) {
     rotaryEncoder.setEncoderValue(0);
 }
 
+static void btn_ota_event_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    /*lv_obj_t * btn = lv_event_get_target(e);*/
+    if(code == LV_EVENT_CLICKED) {
+        
+    }
+}
+
+static void btn_neo_event_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    /*lv_obj_t * btn = lv_event_get_target(e);*/
+    if(code == LV_EVENT_CLICKED) {
+        for (int j = 0; j < numColors; j++) {
+            cycleNeoPixelColors();
+            delay(500);
+        }
+
+        clearNeoPixels();
+    }
+}
+
+/**
+ * Create a button with a label and react on click event.
+ */
+void lv_example_get_started_2(void)
+{
+    lv_obj_t * btn_ota = lv_button_create(lv_screen_active());     
+    lv_obj_set_pos(btn_ota, 30, 10);                            
+    lv_obj_set_size(btn_ota, 120, 50);                         
+    lv_obj_add_event_cb(btn_ota, btn_ota_event_cb, LV_EVENT_ALL, NULL);     
+
+    lv_obj_t * label = lv_label_create(btn_ota);          /*Add a label to the button*/
+    lv_label_set_text(label, "Activate OTA");                     /*Set the labels text*/
+    lv_obj_center(label);
+
+    lv_obj_t * btn_neo = lv_button_create(lv_screen_active());     
+    lv_obj_set_pos(btn_neo, 170, 10);                            
+    lv_obj_set_size(btn_neo, 120, 50);                         
+    lv_obj_add_event_cb(btn_neo, btn_neo_event_cb, LV_EVENT_ALL, NULL);     
+
+    lv_obj_t * label_neo = lv_label_create(btn_neo);          /*Add a label to the button*/
+    lv_label_set_text(label_neo, "Test NeoPixels");                     /*Set the labels text*/
+    lv_obj_center(label_neo);
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial);
@@ -102,15 +185,6 @@ void setup() {
     // Initialize each LED pin as an output
     for (int i = 0; i < numLeds; i++) {
         pinMode(ledPins[i], OUTPUT);
-        digitalWrite(ledPins[i], HIGH);
-        Serial.printf("Set LED %d on\n", i);
-        delay(500);
-    }
-
-    for (int i = numLeds - 1; i > -1; i--) {
-        digitalWrite(ledPins[i], LOW);
-        Serial.printf("Set LED %d off\n", i);
-        delay(500);
     }
 
     initializeScreen();  // Initialize the TFT screen
@@ -178,50 +252,31 @@ void setup() {
 
     Serial.println("YoHoHo its a Pirates Life for me...");
     playPirateShipAnimation();  // Play the animation on startup
+    lv_init();
+
+    /*Set a tick source so that LVGL will know how much time elapsed. */
+    lv_tick_set_cb(my_tick);
+
+    /* register print function for debugging */
+#if LV_USE_LOG != 0
+    lv_log_register_print_cb( my_print );
+#endif
+
+    lv_display_t * disp;
+    /*TFT_eSPI can be enabled lv_conf.h to initialize the display in a simple way*/
+    disp = lv_tft_espi_create(TFT_HOR_RES, TFT_VER_RES, draw_buf, sizeof(draw_buf));
+
+    /*Initialize the (dummy) input device driver*/
+    lv_indev_t * indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER); /*Touchpad should have POINTER type*/
+    lv_indev_set_read_cb(indev, my_touchpad_read);
+
+    lv_display_set_rotation(disp, TFT_ROTATION);
+    
+    lv_example_get_started_2();
 }
 
 void loop() {
-    // Enter button double-press detection
-    int enterButtonState = digitalRead(BUTTON_ENTER_PIN);
-    if (enterButtonState == LOW && !firstEnterPressDetected) {
-        firstEnterPressDetected = true;
-        lastEnterPressTime = millis();
-    } else if (enterButtonState == LOW && firstEnterPressDetected && (millis() - lastEnterPressTime < 500)) {
-        // Second press within 500 ms - switch to QA mode
-        enterQAMode();  // Enter QA mode
-    } else if (millis() - lastEnterPressTime > 500) {
-        // Reset if more than 500 ms passed since the first press
-        firstEnterPressDetected = false;
-    }
-
-    // Run diagnostics every 10 minutes
-    if (millis() - lastDiagnosticsRun >= diagnosticsInterval) {
-        runDiagnostics();
-        lastDiagnosticsRun = millis();
-    }
-    
-   // if (millis() - lastBatteryCheck >= batteryCheckInterval) {
-   //     checkBatteryStatus();
-   //     lastBatteryCheck = millis();
-   // }
-
-    if (rotaryEncoderButtonPushedFlag) { 
-        Serial.println("Rotary Encoder button pressed");
-        rotaryEncoderButtonPushedFlag = false;
-    }
-
-    if (rotaryEncoderTurnedLeftFlag) {
-        Serial.println("Rotary Encoder turned left.");
-        rotaryEncoderTurnedLeftFlag = false;
-    } else if (rotaryEncoderTurnedRightFlag) {
-        Serial.println("Rotary Encoder turned right.");
-        rotaryEncoderTurnedRightFlag = false;
-    }
-
-    if (ft6336u.read_td_status()) {
-        displayCoordinates(ft6336u.read_touch1_x(),ft6336u.read_touch1_y());
-    }
-
-    // Call the button check function to handle button actions outside QA Mode
-    checkButtonStates();
+    lv_timer_handler();
+    delay(5);
 }
