@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <FT6336U.h>
 #include <lvgl.h>
-//#include <Adafruit_MAX1704X.h>  // Include MAX17048 library
+#include <Adafruit_MAX1704X.h>  // Include MAX17048 library
 #include "pins.h"
 #include <SPI.h>
 #include <SD.h>
@@ -28,20 +28,20 @@ uint32_t draw_buf[DRAW_BUF_SIZE / 4];
 lv_obj_t * main_menu; // Main screen container
 lv_obj_t * window1;   // First window
 lv_obj_t * window2;   // Second window
+lv_obj_t * buzzer_slider_label;
 
-//Adafruit_MAX17048 max17048;  // Create MAX17048 object
+void create_main_menu();
+void create_window1();
+void create_window2();
 
-//unsigned long lastBatteryCheck = 0;        // Track last battery check time
-//const unsigned long batteryCheckInterval = 60000;  // Check battery every 60 seconds
-
-unsigned long lastDiagnosticsRun = 0;      // Track last diagnostics run time
-const unsigned long diagnosticsInterval = 600000;  // Run every 10 minutes (600000 ms)
+Adafruit_MAX17048 max17048;  // Create MAX17048 object
 
 SPIClass hspi = SPIClass(HSPI); // Using HSPI as it's unused
 
 // Array of LED pins
 int ledPins[] = {LED_PIN_1, LED_PIN_2, LED_PIN_3, LED_PIN_4, LED_PIN_5, LED_PIN_6};
 int numLeds = sizeof(ledPins) / sizeof(ledPins[0]);
+bool ledStatus = false;
 FT6336U ft6336u(TOUCH_I2C_SDA, TOUCH_I2C_SCL, TOUCH_RST, TOUCH_INT_PIN);
 
 // Define color array and number of colors for NeoPixel
@@ -55,10 +55,6 @@ int numColors = sizeof(colors) / sizeof(colors[0]);
 // Variables for rotary encoder
 RotaryEncoder rotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B, ENCODER_BUTTON_PIN);
 volatile bool rotaryEncoderTurnedLeftFlag, rotaryEncoderTurnedRightFlag, rotaryEncoderButtonPushedFlag;
-
-// State tracking for the boot button with debounce
-unsigned long lastEnterPressTime = 0;
-bool firstEnterPressDetected = false;
 
 /*Read the touchpad*/
 void my_touchpad_read( lv_indev_t * indev, lv_indev_data_t * data )
@@ -131,51 +127,150 @@ void rotaryEncoderCallback(long value) {
     rotaryEncoder.setEncoderValue(0);
 }
 
-static void btn_ota_event_cb(lv_event_t * e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    /*lv_obj_t * btn = lv_event_get_target(e);*/
-    if(code == LV_EVENT_CLICKED) {
-        
-    }
+static void slider_event_cb(lv_event_t * e) {
+    lv_obj_t * slider = (lv_obj_t *)lv_event_get_target(e);
+    int tone_value = lv_slider_get_value(slider); // Get the slider value
+
+    /* Update the label */
+    char buf[16];
+    snprintf(buf, sizeof(buf), "Tone: %dHz", tone_value);
+    lv_label_set_text(buzzer_slider_label, buf);
+
+    /* Set RGB LED color */
+    if (tone_value == 0)
+        noTone(BUZZER_PIN);
+    else
+        tone(BUZZER_PIN, tone_value);
 }
 
-static void btn_neo_event_cb(lv_event_t * e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    /*lv_obj_t * btn = lv_event_get_target(e);*/
-    if(code == LV_EVENT_CLICKED) {
-        for (int j = 0; j < numColors; j++) {
-            cycleNeoPixelColors();
-            delay(500);
+void create_buzzer_window(void) {
+    window2 = lv_obj_create(NULL);  // Create a new screen for Window 1
+    lv_scr_load(window2);           // Load the new screen
+
+    lv_obj_set_flex_flow(window2, LV_FLEX_FLOW_ROW_WRAP);
+
+    // Set padding and spacing for Flexbox layout
+    lv_obj_set_style_pad_row(window2, 10, 0);  // Row spacing
+    lv_obj_set_style_pad_column(window2, 10, 0); // Column spacing
+    lv_obj_set_style_pad_all(window2, 20, 0);  // Padding around the grid
+
+    lv_obj_t * slider = lv_slider_create(window2);
+    lv_obj_set_width(slider, 200); // Set the slider width
+    lv_obj_align(slider, LV_ALIGN_CENTER, 0, 0);
+    lv_slider_set_range(slider, 0, 2000); // Slider range
+    lv_obj_add_event_cb(slider, slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* Create a label to display the slider value */
+    buzzer_slider_label = lv_label_create(window2);
+    lv_label_set_text(buzzer_slider_label, "Tone: 0 Hz");
+    lv_obj_align_to(buzzer_slider_label, slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+    // Back button to return to the main menu
+    lv_obj_t * back_btn = lv_btn_create(window2);
+    lv_obj_set_size(back_btn, 80, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t * e) {
+        create_main_menu();
+    }, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+}
+
+void neopixel_event_handler(lv_event_t * e) {
+    lv_obj_t * btn = (lv_obj_t *)lv_event_get_target(e);
+    const char * label = lv_label_get_text(lv_obj_get_child(btn, 0));
+
+    if(strcmp(label, "Red") == 0) {
+        for (int i = 0; i < NUM_NEOPIXELS; i++) {
+            setNeoPixelColor(i, Adafruit_NeoPixel::Color(255, 0, 0));
         }
-
-        clearNeoPixels();
+    } else if(strcmp(label, "Green") == 0) {
+        for (int i = 0; i < NUM_NEOPIXELS; i++) {
+            setNeoPixelColor(i, Adafruit_NeoPixel::Color(0, 255, 0));
+        }
+    } else if(strcmp(label, "Blue") == 0) {
+        for (int i = 0; i < NUM_NEOPIXELS; i++) {
+            setNeoPixelColor(i, Adafruit_NeoPixel::Color(0, 0, 255));
+        }
+    } else if(strcmp(label, "Off") == 0) {
+        for (int i = 0; i < NUM_NEOPIXELS; i++) {
+            clearNeoPixels();
+        }
     }
 }
 
-/**
- * Create a button with a label and react on click event.
- */
-void lv_example_get_started_2(void)
+void create_neo_window(void) {
+    const String buttons[] = {"Red", "Green", "Blue", "Off"};
+    window1 = lv_obj_create(NULL);  // Create a new screen for Window 1
+    lv_scr_load(window1);           // Load the new screen
+
+    lv_obj_set_flex_flow(window1, LV_FLEX_FLOW_ROW_WRAP);
+
+    // Set padding and spacing for Flexbox layout
+    lv_obj_set_style_pad_row(window1, 10, 0);  // Row spacing
+    lv_obj_set_style_pad_column(window1, 10, 0); // Column spacing
+    lv_obj_set_style_pad_all(window1, 20, 0);  // Padding around the grid
+
+    for (String name : buttons) {
+        lv_obj_t * btn = lv_btn_create(window1); // Button to open Window 1
+        lv_obj_set_size(btn, 120, 50);
+        lv_obj_add_event_cb(btn, neopixel_event_handler, LV_EVENT_CLICKED, NULL);
+        lv_obj_t * label = lv_label_create(btn);
+        lv_label_set_text(label, name.c_str());
+        lv_obj_center(label);
+    }
+
+    // Back button to return to the main menu
+    lv_obj_t * back_btn = lv_btn_create(window1);
+    lv_obj_set_size(back_btn, 80, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t * e) {
+        create_main_menu();
+    }, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+}
+
+void button_event_handler(lv_event_t * e) {
+    lv_obj_t * btn = (lv_obj_t *)lv_event_get_target(e);
+    const char * label = lv_label_get_text(lv_obj_get_child(btn, 0));
+
+    if (strcmp(label, "NeoPixels") == 0) {
+        create_neo_window();
+    } else if (strcmp(label, "LEDs") == 0) {
+        ledStatus = !ledStatus;
+        for (int i = 0; i < numLeds; i++) {
+                digitalWrite(ledPins[i], ledStatus);
+        }
+    } else if (strcmp(label, "Buzzer") == 0) {
+        create_buzzer_window();
+    }
+}
+
+void create_main_menu()
 {
-    lv_obj_t * btn_ota = lv_button_create(lv_screen_active());     
-    lv_obj_set_pos(btn_ota, 30, 10);                            
-    lv_obj_set_size(btn_ota, 120, 50);                         
-    lv_obj_add_event_cb(btn_ota, btn_ota_event_cb, LV_EVENT_ALL, NULL);     
+    const String buttons[] = {"NeoPixels", "LEDs", "Buzzer", "SD Card", "Battery Meter", "Buttons", "Activate OTA"};
+    main_menu = lv_obj_create(NULL);  // New screen
+    lv_scr_load(main_menu);           // Load main menu screen
 
-    lv_obj_t * label = lv_label_create(btn_ota);          /*Add a label to the button*/
-    lv_label_set_text(label, "Activate OTA");                     /*Set the labels text*/
-    lv_obj_center(label);
+    lv_obj_set_flex_flow(main_menu, LV_FLEX_FLOW_ROW_WRAP);
 
-    lv_obj_t * btn_neo = lv_button_create(lv_screen_active());     
-    lv_obj_set_pos(btn_neo, 170, 10);                            
-    lv_obj_set_size(btn_neo, 120, 50);                         
-    lv_obj_add_event_cb(btn_neo, btn_neo_event_cb, LV_EVENT_ALL, NULL);     
+    // Set padding and spacing for Flexbox layout
+    lv_obj_set_style_pad_row(main_menu, 10, 0);  // Row spacing
+    lv_obj_set_style_pad_column(main_menu, 10, 0); // Column spacing
+    lv_obj_set_style_pad_all(main_menu, 20, 0);  // Padding around the grid
 
-    lv_obj_t * label_neo = lv_label_create(btn_neo);          /*Add a label to the button*/
-    lv_label_set_text(label_neo, "Test NeoPixels");                     /*Set the labels text*/
-    lv_obj_center(label_neo);
+    for (String name : buttons) {
+        lv_obj_t * btn = lv_btn_create(main_menu); // Button to open Window 1
+        lv_obj_set_size(btn, 120, 50);
+        lv_obj_add_event_cb(btn, button_event_handler, LV_EVENT_CLICKED, NULL);
+        lv_obj_t * label = lv_label_create(btn);
+        lv_label_set_text(label, name.c_str());
+        lv_obj_center(label);
+    }
+    
 }
 
 void setup() {
@@ -187,7 +282,7 @@ void setup() {
         pinMode(ledPins[i], OUTPUT);
     }
 
-    initializeScreen();  // Initialize the TFT screen
+    //initializeScreen();  // Initialize the TFT screen
     displayWelcomeMessage();  // Display a welcome message
 
     // Initialize I2C for MAX17048
@@ -273,7 +368,7 @@ void setup() {
 
     lv_display_set_rotation(disp, TFT_ROTATION);
     
-    lv_example_get_started_2();
+    create_main_menu();
 }
 
 void loop() {
