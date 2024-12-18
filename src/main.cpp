@@ -16,6 +16,7 @@
 #include "BadgePirates/PirateShipAnimation.h"
 #include "LED/NeoPixelControl.h"
 #include "Screen/Screen_Module.h"
+#include "ota.hpp"
 
 #define TFT_HOR_RES   240
 #define TFT_VER_RES   320
@@ -246,6 +247,8 @@ void button_event_handler(lv_event_t * e) {
         }
     } else if (strcmp(label, "Buzzer") == 0) {
         create_buzzer_window();
+    } else if (strcmp(label, "Activate OTA") == 0) {
+        OTA::checkOTASync();
     }
 }
 
@@ -286,11 +289,12 @@ void setup() {
     displayWelcomeMessage();  // Display a welcome message
 
     // Initialize I2C for MAX17048
-    //if (!max17048.begin(&Wire)) {
-    //    Serial.println("Could not find MAX17048 chip!");
-    //} else {
-    //    Serial.println("MAX17048 found!");
-    //}
+    Wire.begin(TOUCH_I2C_SDA, TOUCH_I2C_SCL);
+    if (!max17048.begin(&Wire)) {
+        Serial.println("Could not find MAX17048 chip!");
+    } else {
+        Serial.println("MAX17048 found!");
+    }
 
     // Initialize buttons with pull-up resistors
     pinMode(BUTTON_ENTER_PIN, INPUT_PULLUP);
@@ -334,8 +338,8 @@ void setup() {
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
 
     // Run an initial Wi-Fi scan and connect to Wi-Fi
-    //scanWiFiNetworks();     // Use scan function from WiFi_Module
-    //connectToWiFi();        // Use connect function from WiFi_Settings
+    scanWiFiNetworks();     // Use scan function from WiFi_Module
+    connectToWiFi();        // Use connect function from WiFi_Settings
 
     // Display initial battery status
     //checkBatteryStatus();
