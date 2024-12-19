@@ -29,11 +29,10 @@ uint32_t draw_buf[DRAW_BUF_SIZE / 4];
 lv_obj_t * main_menu; // Main screen container
 lv_obj_t * window1;   // First window
 lv_obj_t * window2;   // Second window
+lv_obj_t * window3;   // Second window
 lv_obj_t * buzzer_slider_label;
 
 void create_main_menu();
-void create_window1();
-void create_window2();
 
 Adafruit_MAX17048 max17048;  // Create MAX17048 object
 
@@ -144,7 +143,40 @@ static void slider_event_cb(lv_event_t * e) {
         tone(BUZZER_PIN, tone_value);
 }
 
-void create_buzzer_window(void) {
+void create_battery_window() {
+    window3 = lv_obj_create(NULL);  // Create a new screen for Window 1
+    lv_scr_load(window3);           // Load the new screen
+    float bat_cent = max17048.cellPercent();
+    float bat_volt = max17048.cellVoltage();
+    char buf[100];
+
+    snprintf(buf, sizeof(buf), "Battery %: %f Voltage: %f", bat_cent, bat_volt);
+
+    lv_obj_set_flex_flow(window3, LV_FLEX_FLOW_ROW_WRAP);
+
+    // Set padding and spacing for Flexbox layout
+    lv_obj_set_style_pad_row(window3, 10, 0);  // Row spacing
+    lv_obj_set_style_pad_column(window3, 10, 0); // Column spacing
+    lv_obj_set_style_pad_all(window3, 20, 0);  // Padding around the grid
+
+    lv_obj_t * label = lv_label_create(window3);
+    lv_label_set_text(label, buf);
+    lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+
+    // Back button to return to the main menu
+    lv_obj_t * back_btn = lv_btn_create(window3);
+    lv_obj_set_size(back_btn, 80, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t * e) {
+        create_main_menu();
+    }, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+}
+
+void create_buzzer_window() {
     window2 = lv_obj_create(NULL);  // Create a new screen for Window 1
     lv_scr_load(window2);           // Load the new screen
 
@@ -249,6 +281,8 @@ void button_event_handler(lv_event_t * e) {
         create_buzzer_window();
     } else if (strcmp(label, "Activate OTA") == 0) {
         OTA::checkOTASync();
+    } else if (strcmp(label, "Battery Meter") == 0) {
+        create_battery_window();
     }
 }
 

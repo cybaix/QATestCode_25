@@ -7,9 +7,9 @@
 #include <TFT_eSPI.h> 
 
 #define OTA_SERVER_URL "http://badge.cactuscon.com/ota/"
-#define OTA_MANIFEST_NAME "updates"
-#define OTA_BINARY_NAME "cactus.bin" // Don't make this firmware-version-X.bin, this shouldn't need to be changed.
-#define VERSION 0
+#define OTA_MANIFEST_NAME "version"
+#define OTA_BINARY_NAME "firmware.bin" // Don't make this firmware-version-X.bin, this shouldn't need to be changed.
+#define VERSION -1
 
 class OTA{
     private:
