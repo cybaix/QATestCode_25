@@ -22,7 +22,7 @@
 #define BUZZER_PIN 19
 
 // Define Rotary Encoder pins
-#define ENCODER_PIN_A 45
+#define ENCODER_PIN_A 40
 #define ENCODER_PIN_B 48
 #define ENCODER_BUTTON_PIN 20
 
